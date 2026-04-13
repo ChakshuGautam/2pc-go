@@ -15,7 +15,7 @@ type OutboxRow struct {
 	Topic        string
 	Key          string
 	Payload      json.RawMessage
-	TraceContext json.RawMessage
+	TraceContext *json.RawMessage
 	PublishedAt  *time.Time
 	CreatedAt    time.Time
 }

@@ -25,12 +25,12 @@ func extractTraceContext(ctx context.Context) json.RawMessage {
 // injectTraceContext restores a saved trace context from JSONB and
 // writes it into Kafka message headers so downstream consumers
 // continue the same distributed trace.
-func injectTraceContext(ctx context.Context, traceJSON json.RawMessage, msg *kafka.Message) {
-	if len(traceJSON) == 0 {
+func injectTraceContext(ctx context.Context, traceJSON *json.RawMessage, msg *kafka.Message) {
+	if traceJSON == nil || len(*traceJSON) == 0 {
 		return
 	}
 	carrier := propagation.MapCarrier{}
-	if err := json.Unmarshal(traceJSON, &carrier); err != nil {
+	if err := json.Unmarshal(*traceJSON, &carrier); err != nil {
 		return
 	}
 	parentCtx := otel.GetTextMapPropagator().Extract(ctx, carrier)
