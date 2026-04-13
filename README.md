@@ -285,7 +285,3 @@ The pattern works with any language and database that supports transactions. The
 - [Transactional Outbox Pattern](https://microservices.io/patterns/data/transactional-outbox.html) — Chris Richardson's canonical description
 - [Reliable Microservices Data Exchange with the Outbox Pattern](https://debezium.io/blog/2019/02/19/reliable-microservices-data-exchange-with-the-outbox-pattern/) — Debezium's CDC-based alternative (no polling worker; Postgres WAL instead)
 - [Designing Data-Intensive Applications](https://dataintensive.net/) — Martin Kleppmann's book covers exactly-once semantics and the theory behind this
-
----
-
-*Built from patterns learned shipping [Olly](https://hiolly.com), a health insurance platform where losing a claim event or billing event is not an option.*
