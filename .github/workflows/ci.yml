@@ -24,6 +24,12 @@ jobs:
         run: |
           docker compose exec redpanda rpk topic create orders.events --partitions 1
           docker compose exec redpanda rpk topic list
+          docker compose exec redpanda rpk cluster info
+
+      - name: Test broker connectivity from host
+        run: |
+          echo "" | nc -w 2 localhost 29092 && echo "Port 29092 reachable" || echo "Port 29092 NOT reachable"
+          docker compose exec redpanda rpk cluster metadata --brokers localhost:29092 || true
 
       - name: Apply schema
         run: PGPASSWORD=demo psql -h localhost -U demo -d demo -f schema.sql
@@ -54,17 +60,17 @@ jobs:
       - name: Wait for outbox worker to publish
         run: sleep 10
 
-      - name: Debug - check outbox and server logs
+      - name: Debug
         if: always()
         run: |
           echo "=== Server logs ==="
           cat /tmp/server.log || true
+          echo ""
           echo "=== Outbox rows ==="
-          PGPASSWORD=demo psql -h localhost -U demo -d demo -c "SELECT id, topic, key, published_at, created_at FROM outbox;"
-          echo "=== Kafka topic ==="
-          docker compose exec redpanda rpk topic consume orders.events --num 1 || true
-          echo "=== Redpanda broker info ==="
-          docker compose exec redpanda rpk cluster info || true
+          PGPASSWORD=demo psql -h localhost -U demo -d demo -c "SELECT id, topic, key, published_at, created_at FROM outbox;" || true
+          echo ""
+          echo "=== Redpanda topics ==="
+          docker compose exec redpanda rpk topic list || true
 
       - name: Verify order in database
         run: |
