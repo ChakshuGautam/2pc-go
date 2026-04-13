@@ -28,9 +28,11 @@ func main() {
 	defer db.Close()
 
 	writer := &kafka.Writer{
-		Addr:         kafka.TCP(broker),
-		BatchTimeout: 50 * time.Millisecond,
-		RequiredAcks: kafka.RequireOne,
+		Addr:                   kafka.TCP(broker),
+		BatchTimeout:           50 * time.Millisecond,
+		WriteTimeout:           10 * time.Second,
+		RequiredAcks:           kafka.RequireOne,
+		AllowAutoTopicCreation: true,
 	}
 	defer writer.Close()
 

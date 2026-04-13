@@ -61,7 +61,9 @@ func tick(ctx context.Context, db *sql.DB, writer *kafka.Writer) error {
 
 	// Publish the batch. If this fails, rows stay unpublished
 	// and will be retried on the next tick.
-	if err := writer.WriteMessages(ctx, msgs...); err != nil {
+	writeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := writer.WriteMessages(writeCtx, msgs...); err != nil {
 		return err
 	}
 

@@ -33,8 +33,9 @@ jobs:
 
       - name: Start server
         run: |
-          ./2pc-go 2>&1 &
+          ./2pc-go > /tmp/server.log 2>&1 &
           sleep 2
+          cat /tmp/server.log
         env:
           DATABASE_URL: postgres://demo:demo@localhost:5432/demo?sslmode=disable
           KAFKA_BROKER: localhost:29092
@@ -56,10 +57,14 @@ jobs:
       - name: Debug - check outbox and server logs
         if: always()
         run: |
+          echo "=== Server logs ==="
+          cat /tmp/server.log || true
           echo "=== Outbox rows ==="
           PGPASSWORD=demo psql -h localhost -U demo -d demo -c "SELECT id, topic, key, published_at, created_at FROM outbox;"
           echo "=== Kafka topic ==="
-          docker compose exec redpanda rpk topic consume orders.events --num 1 --timeout 5s || true
+          docker compose exec redpanda rpk topic consume orders.events --num 1 || true
+          echo "=== Redpanda broker info ==="
+          docker compose exec redpanda rpk cluster info || true
 
       - name: Verify order in database
         run: |
