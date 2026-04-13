@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS outbox (
     topic         TEXT        NOT NULL,
     key           TEXT        NOT NULL,
     payload       JSONB       NOT NULL,
+    trace_context JSONB,
     published_at  TIMESTAMPTZ,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );

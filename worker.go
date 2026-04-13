@@ -46,11 +46,17 @@ func tick(ctx context.Context, db *sql.DB, writer *kafka.Writer) error {
 			"payload":     json.RawMessage(row.Payload),
 		})
 
-		msgs = append(msgs, kafka.Message{
+		msg := kafka.Message{
 			Topic: row.Topic,
 			Key:   []byte(row.Key),
 			Value: env,
-		})
+		}
+
+		// Restore OTel trace context from the JSONB column and
+		// inject it into Kafka headers (see trace.go).
+		injectTraceContext(ctx, row.TraceContext, &msg)
+
+		msgs = append(msgs, msg)
 	}
 
 	// Publish the batch. If this fails, rows stay unpublished

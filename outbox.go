@@ -11,12 +11,13 @@ import (
 
 // OutboxRow is a row in the outbox table.
 type OutboxRow struct {
-	ID          uuid.UUID
-	Topic       string
-	Key         string
-	Payload     json.RawMessage
-	PublishedAt *time.Time
-	CreatedAt   time.Time
+	ID           uuid.UUID
+	Topic        string
+	Key          string
+	Payload      json.RawMessage
+	TraceContext json.RawMessage
+	PublishedAt  *time.Time
+	CreatedAt    time.Time
 }
 
 // Enqueue inserts an outbox row inside the caller's transaction.
@@ -29,10 +30,14 @@ func Enqueue(ctx context.Context, tx *sql.Tx, topic, key string, payload any) er
 		return err
 	}
 
+	// Store current OTel trace context so the worker can
+	// restore it when publishing (see trace.go).
+	traceCtx := extractTraceContext(ctx)
+
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO outbox (id, topic, key, payload)
-		VALUES ($1, $2, $3, $4)`,
-		uuid.New(), topic, key, data,
+		INSERT INTO outbox (id, topic, key, payload, trace_context)
+		VALUES ($1, $2, $3, $4, $5)`,
+		uuid.New(), topic, key, data, traceCtx,
 	)
 	return err
 }
@@ -41,7 +46,7 @@ func Enqueue(ctx context.Context, tx *sql.Tx, topic, key string, payload any) er
 // been published yet, ordered oldest-first.
 func ListUnpublished(ctx context.Context, db *sql.DB, limit int) ([]OutboxRow, error) {
 	rows, err := db.QueryContext(ctx, `
-		SELECT id, topic, key, payload, created_at
+		SELECT id, topic, key, payload, trace_context, created_at
 		FROM outbox
 		WHERE published_at IS NULL
 		ORDER BY created_at
@@ -54,7 +59,7 @@ func ListUnpublished(ctx context.Context, db *sql.DB, limit int) ([]OutboxRow, e
 	var result []OutboxRow
 	for rows.Next() {
 		var r OutboxRow
-		if err := rows.Scan(&r.ID, &r.Topic, &r.Key, &r.Payload, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Topic, &r.Key, &r.Payload, &r.TraceContext, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		result = append(result, r)
