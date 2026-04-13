@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: demo
+          POSTGRES_PASSWORD: demo
+          POSTGRES_DB: demo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U demo"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 10
+
+      redpanda:
+        image: redpandadata/redpanda:v24.1.1
+        ports:
+          - 29092:29092
+        options: >-
+          --health-cmd "rpk cluster health"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Apply schema
+        run: PGPASSWORD=demo psql -h localhost -U demo -d demo -f schema.sql
+
+      - name: Build
+        run: go build -o 2pc-go .
+
+      - name: Start server
+        run: |
+          ./2pc-go &
+          sleep 2
+        env:
+          DATABASE_URL: postgres://demo:demo@localhost:5432/demo?sslmode=disable
+          KAFKA_BROKER: localhost:29092
+
+      - name: Create an order
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://localhost:8090/orders \
+            -H 'Content-Type: application/json' \
+            -d '{"item": "widget", "qty": 3}')
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -1)
+          echo "Status: $HTTP_CODE"
+          echo "Body: $BODY"
+          [ "$HTTP_CODE" = "201" ] || exit 1
+
+      - name: Wait for outbox worker to publish
+        run: sleep 3
+
+      - name: Verify order in database
+        run: |
+          COUNT=$(PGPASSWORD=demo psql -h localhost -U demo -d demo -t -c "SELECT count(*) FROM orders;")
+          echo "Orders: $COUNT"
+          [ "$(echo $COUNT | tr -d ' ')" = "1" ] || exit 1
+
+      - name: Verify outbox was drained
+        run: |
+          UNPUBLISHED=$(PGPASSWORD=demo psql -h localhost -U demo -d demo -t -c "SELECT count(*) FROM outbox WHERE published_at IS NULL;")
+          echo "Unpublished outbox rows: $UNPUBLISHED"
+          [ "$(echo $UNPUBLISHED | tr -d ' ')" = "0" ] || exit 1
