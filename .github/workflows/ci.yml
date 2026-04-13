@@ -20,6 +20,11 @@ jobs:
       - name: Start infrastructure
         run: docker compose up -d --wait --wait-timeout 60
 
+      - name: Verify Redpanda is reachable
+        run: |
+          docker compose exec redpanda rpk topic create orders.events --partitions 1
+          docker compose exec redpanda rpk topic list
+
       - name: Apply schema
         run: PGPASSWORD=demo psql -h localhost -U demo -d demo -f schema.sql
 
@@ -28,7 +33,7 @@ jobs:
 
       - name: Start server
         run: |
-          ./2pc-go &
+          ./2pc-go 2>&1 &
           sleep 2
         env:
           DATABASE_URL: postgres://demo:demo@localhost:5432/demo?sslmode=disable
@@ -46,7 +51,15 @@ jobs:
           [ "$HTTP_CODE" = "201" ] || exit 1
 
       - name: Wait for outbox worker to publish
-        run: sleep 5
+        run: sleep 10
+
+      - name: Debug - check outbox and server logs
+        if: always()
+        run: |
+          echo "=== Outbox rows ==="
+          PGPASSWORD=demo psql -h localhost -U demo -d demo -c "SELECT id, topic, key, published_at, created_at FROM outbox;"
+          echo "=== Kafka topic ==="
+          docker compose exec redpanda rpk topic consume orders.events --num 1 --timeout 5s || true
 
       - name: Verify order in database
         run: |
